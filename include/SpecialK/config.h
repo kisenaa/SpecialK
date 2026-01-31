@@ -1409,7 +1409,7 @@ struct sk_config_t
     bool     auto_large_address_patch =  true;
     bool     init_on_separate_thread  =  true;
     bool     init_sync_for_reshade    = false;
-    bool     init_sync_for_streamline = false;
+    bool     init_sync_for_streamline = true;
     bool     shutdown_on_window_close = false;
     bool     disable_dx12_vk_interop  = false;
     bool     reshade_mode             = false;
@@ -1927,6 +1927,7 @@ enum class SK_GAME_ID
   PhoenixWright_Trilogy,        // PWAAT.exe
   eFootball_PES_2021,           // PES2021.exe
   AgeOfEmpires4,                // RelicCardinal.exe
+  ArknightEndfield,             // Endfield.exe (Appear as PlatformProcess.exe)
 
   UNKNOWN_GAME               = 0xffff
 };

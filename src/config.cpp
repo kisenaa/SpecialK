@@ -323,13 +323,21 @@ SK_GetCurrentGameID (void)
           { L"PWAAT.exe",                              SK_GAME_ID::PhoenixWright_Trilogy        },
           { L"PES2021.exe",                            SK_GAME_ID::eFootball_PES_2021           },
           { L"RelicCardinal.exe",                      SK_GAME_ID::AgeOfEmpires4                },
+          { L"PlatformProcess.exe",                    SK_GAME_ID::ArknightEndfield             },
+          { L"Endfield.exe",                           SK_GAME_ID::ArknightEndfield             },
         };
 
     first_check  = false;
     current_game =
       constexpr_game_s::get (
-               _games, hash_lower (SK_GetHostApp ())
+               _games, hash_lower (SK_GetHostApp())
                             );
+    auto game_str =
+      std::format (L"Identified GameID: {}\n",
+                    static_cast <uint32_t> (current_game));
+
+   // OutputDebugStringW(std::format(L"Identified Game Executable: {}, gameId: {}\n",
+    //  SK_GetHostApp(), game_str).c_str());
 
     // For games that can't be matched using a single executable filename
     if (current_game == SK_GAME_ID::UNKNOWN_GAME)
@@ -1349,6 +1357,7 @@ bool hook_winmm_orig     = true;
 bool
 SK_LoadConfig (const std::wstring& name)
 {
+//  OutputDebugStringW(std::format(L"Loading config for: {}", name ).c_str());
   if (SK_GetHostAppUtil ()->isBlacklisted ())
   {
     return false;
@@ -1558,6 +1567,8 @@ SK_LoadConfigEx (std::wstring name, bool create)
       SK_FormatStringW ( L"%s%s.ini",
                            SK_GetConfigPath (), name.c_str () );
 
+//  OutputDebugStringW(std::format(L"Full config path: {}", full_name).c_str());
+
   std::wstring undecorated_name (name);
 
   if ( undecorated_name.find (L"default_") != std::wstring::npos &&
@@ -1686,6 +1697,7 @@ auto DeclKeybind =
                     (sec),      ((bind)->short_name)\
 }
 
+//OutputDebugStringW(L"[SK] - LoadConfig #1");
   //
   // Create Parameters
   //
@@ -2601,6 +2613,7 @@ auto DeclKeybind =
     ++sec;
   }
 
+//  OutputDebugStringW(L"[SK] - LoadConfig #2");
 
 
   //
@@ -2666,6 +2679,7 @@ auto DeclKeybind =
   config.render.dxgi.exception_mode = SK_NoPreference;
   config.render.dxgi.scaling_mode   = SK_NoPreference;
 
+//  OutputDebugStringW(L"[SK] - LoadConfig #2A");
 
   //
   // Application Compatibility Overrides
@@ -2673,6 +2687,7 @@ auto DeclKeybind =
   //
   if (SK_GetCurrentGameID () != SK_GAME_ID::UNKNOWN_GAME)
   {
+//    OutputDebugStringW(L"[SK] - Checking");
     switch (SK_GetCurrentGameID ())
     {
       case SK_GAME_ID::Tyranny:
@@ -4547,9 +4562,32 @@ auto DeclKeybind =
       {
         SK_EnderLilies_InitPlugIn ();
       } break;
+
+      case SK_GAME_ID::ArknightEndfield:
+      {
+         // OutputDebugStringW(std::format(L"[SK] - ArknightEndfield Loaded. host app: {}", SK_GetHostApp()).c_str());
+          // Work-around anti-cheat
+          config.window.dont_hook_wndproc = true;
+          config.compatibility.disable_debug_features = true;
+          config.system.handle_crashes = false;
+
+          config.nvidia.reflex.native = true;
+          config.nvidia.reflex.vulkan = true;
+
+          // Game has native PlayStation support through libScePad and
+          //   haptics will not work if the PID is spoofed.
+          config.input.gamepad.scepad.hide_ds_edge_pid = SK_Disabled;
+          config.input.gamepad.xinput.emulate = false;
+          input.gamepad.scepad.hide_ds_edge_pid->store(config.input.gamepad.scepad.hide_ds_edge_pid);
+      } break;
 #endif
     }
   }
+   else {
+    // OutputDebugStringW(L"[SK] - LoadConfig #2A - else");
+    }
+
+//  OutputDebugStringW(L"[SK] - LoadConfig #2B");
 
   if (! apis.last_known->load ((int &)config.apis.last_known))
     config.apis.last_known = SK_RenderAPI::Reserved;
@@ -4562,6 +4600,7 @@ auto DeclKeybind =
          config.apis.last_known
   );
 
+//  OutputDebugStringW(L"[SK] - LoadConfig #3");
 
 #ifdef _M_IX86
   apis.ddraw.hook->load  (config.apis.ddraw.hook);
@@ -4606,6 +4645,8 @@ auto DeclKeybind =
   //
   // Load Parameters
   //
+//  OutputDebugStringW(L"[SK] Storing Configs[2]: ");
+
   compatibility.sdl_sanity_level->load      (config.compatibility.sdl_sanity_level);
   compatibility.fsr3_mode->load             (config.compatibility.fsr3_mode);
   compatibility.reshade_mode->load          (config.compatibility.reshade_mode);
@@ -5528,6 +5569,7 @@ auto DeclKeybind =
     config.window.borderless = true;
   }
 
+//  OutputDebugStringW(L"[SK] - LoadConfig #4");
 
   // Oh boy, let the fun begin :)
   //
@@ -6172,6 +6214,7 @@ auto DeclKeybind =
 
   steam.system.crapcom_mode->load (config.steam.crapcom_mode);
 
+//  OutputDebugStringW(L"[SK] - LoadConfig #5");
 
   bool global_override = false;
 
@@ -6372,7 +6415,8 @@ auto DeclKeybind =
     platform_ini->rename (migrate_platform_config.c_str ());
 
 
-
+  static auto code_sigs = SK_VerifyTrust_GetCodeSignature(SK_GetFullyQualifiedApp());
+//  SK_LOGi0(L"\ncode signature: %s", code_sigs.subject.c_str());
 
   //
   // DRM Workarounds
@@ -6390,7 +6434,8 @@ auto DeclKeybind =
       SK_VerifyTrust_GetCodeSignature (SK_GetFullyQualifiedApp ());
 
     if (StrStrIW (code_sig.subject.c_str (), L"COGNOSPHERE") ||
-        StrStrIW (code_sig.subject.c_str (), L"KURO TECHNOLOGY"))
+        StrStrIW (code_sig.subject.c_str (), L"KURO TECHNOLOGY") ||
+        StrStrIW(code_sig.subject.c_str(), L"GRYPH FRONTIER"))
     {
       config.compatibility.disable_debug_features = true;
     }
@@ -6490,6 +6535,7 @@ auto DeclKeybind =
   }
 #endif
 
+//  OutputDebugStringW(L"[SK] - LoadConfig #6");
 
   // Config opted-in to debugger wait
   if (config.system.wait_for_debugger)
@@ -6524,6 +6570,7 @@ auto DeclKeybind =
       L"Exception %hs during INI Parse", e.what ()
     );
   }
+//  OutputDebugStringW(L"[SK] - LoadConfig #7");
 
   return false;
 }
@@ -6770,6 +6817,7 @@ SK_SaveConfig ( std::wstring name,
     config.apis.last_known = SK_RenderAPI::OpenGL;
 
 
+//  OutputDebugStringW(L"[SK] Storing Configs[1]: ");
   // Don't write these to INI by default, they're rarely needed and planned to be removed
 //compatibility.fsr3_mode->store              (config.compatibility.fsr3_mode);
 //compatibility.reshade_mode->store           (config.compatibility.reshade_mode);

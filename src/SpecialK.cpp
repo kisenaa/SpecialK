@@ -28,7 +28,7 @@
 
 #include <SpecialK/render/d3d9/d3d9_backend.h>
 #include <SpecialK/render/gl/opengl_backend.h>
-
+#include <SpecialK/injection/injection.h>
 #ifndef _M_AMD64
 #include <SpecialK/render/d3d8/d3d8_backend.h>
 #include <SpecialK/render/ddraw/ddraw_backend.h>
@@ -517,9 +517,12 @@ DllMain ( HMODULE hModule,
     //
     case DLL_PROCESS_ATTACH:
     {
+      OutputDebugStringW(std::format(L"DLL_PROCESS_ATTACH: {}", SK_GetHostApp()).c_str());
+
       if (SK_IsServiceHost ())
         return FALSE;
 
+      OutputDebugStringW(L"[1] Passed - Service Host Check");
       int process_protection =
         SK_NT_GetProcessProtection ();
 
@@ -555,6 +558,8 @@ DllMain ( HMODULE hModule,
 
         return bRet;
       };
+      OutputDebugStringW(L"[2] Passed - localdll");
+
 
       // We use SKIM for injection and rundll32 for various tricks
       //   involving restarting the currently running game; neither
@@ -573,6 +578,7 @@ DllMain ( HMODULE hModule,
 
         return bRet;
       }
+      OutputDebugStringW(L"[3] Passed - injectionTool");
 
       // Social distancing like a boss!
       INT dll_isolation_lvl =
@@ -587,6 +593,8 @@ DllMain ( HMODULE hModule,
         return EarlyOut (TRUE);
       }
 
+      OutputDebugStringW(L"[5] Passed - blacklisted keepaway");
+
       if (dll_isolation_lvl >  0)                  return EarlyOut (TRUE);
 
       SK_TLS_Acquire         ();
@@ -594,6 +602,8 @@ DllMain ( HMODULE hModule,
       SK_CreateTeardownEvent ();
 
       SK_TLS_Bottom ()->debug.in_DllMain = true;
+
+      OutputDebugStringW(L"[6] Passed - dll check");
 
       // -> Nothing below this can return FALSE until TLS is tidied up (!!)
 
@@ -603,8 +613,12 @@ DllMain ( HMODULE hModule,
 
       // We don't want to initialize the DLL, but we also don't want it to
       //   re-inject itself constantly; just return TRUE here.
+      OutputDebugStringW(L"[7] Passed - SK_EstablishDllRole");
+
       if (DLL_ROLE::INVALID == SK_GetDLLRole ())   return EarlyOut (TRUE);
       if (! SK_Attach         (SK_GetDLLRole ()))  return EarlyOut (TRUE);
+
+      OutputDebugStringW(std::format(L"[8] Passed - DLL ROLE: {}", static_cast<unsigned int>(SK_GetDLLRole())).c_str());
 
       InterlockedIncrementRelease (
         &__SK_DLL_Refs
@@ -615,7 +629,7 @@ DllMain ( HMODULE hModule,
       //   Must hold a reference to this DLL so that removing the global
       //     hook does not crash the game.
       SK_Inject_AcquireProcess ();
-
+      OutputDebugStringW(L"[SK] DLL_PROCESS_ATTACH SUCCESS");
       return
         ( __SK_DLL_TeardownEvent != nullptr );
     } break;
@@ -730,6 +744,8 @@ DllMain ( HMODULE hModule,
           SK_Sleep (50UL);
         }
       }
+
+  //    OutputDebugStringW(L"[SK] DLL_PROCESS_DETTACH SUCCESS");
     } break;
 
 
@@ -777,6 +793,7 @@ DllMain ( HMODULE hModule,
           }
         }
       }
+//      OutputDebugStringW(L"[SK] DLL_THREAD_ATTACH SUCCESS");
     }
     break;
 
@@ -816,6 +833,7 @@ DllMain ( HMODULE hModule,
           );
         }
       }
+//      OutputDebugStringW(L"[SK] DLL_THREAD_DETTACH SUCCESS");
     }
     break;
   }
@@ -887,6 +905,7 @@ SK_DontInject (void)
 
   SK_SetDLLRole      (DLL_ROLE::INVALID);
 
+//  OutputDebugStringW(L"SK_DontInject: Injection Abborted");
   return FALSE;
 }
 
@@ -976,6 +995,9 @@ _SKM_AutoBootLastKnownAPI (SK_RenderAPI last_known)
 
     if (auto_boot_viable)
     {
+//      OutputDebugStringW(std::format(L"[SK] SKM_AutoBootLastKnownAPI DLL_ROLE_API: {}",
+//      static_cast<int> (std::get <0>(role_reversal[last_known]))).c_str());
+//
       SK_SetDLLRole (std::get <0> (role_reversal [last_known]));
 
 
@@ -1098,9 +1120,29 @@ SK_EstablishDllRole (skWin32Module&& _sk_module)
   if (wszShort == reinterpret_cast <const wchar_t *> (1))
       wszShort = wszSelfTitledDLL;
 
+  auto path =
+    app_cache_mgr->getConfigPathFromAppPath(SK_GetFullyQualifiedApp());
+
+  if (!path.empty()) {
+   // OutputDebugStringW(std::format(L"[SK] Path: {}", path).c_str());
+  }
+
+  //OutputDebugStringW(
+  //  std::format(L"d3d11 {}", static_cast<int>(config.apis.dxgi.d3d11.hook)).c_str()
+  //);
+  //OutputDebugStringW(
+  //  std::format(L"d3d12 {}", static_cast<int>(config.apis.dxgi.d3d12.hook)).c_str()
+  //);
+  //OutputDebugStringW(
+  //  std::format(L"vulkan {}", static_cast<int>(config.apis.Vulkan.hook)).c_str()
+  //);
+  //OutputDebugStringW(
+  //  std::format(L"opengl {}", static_cast<int>(config.apis.OpenGL.hook)).c_str()
+  //);
 
   if (0 == SK_Path_wcsicmp (wszShort, L"dinput8.dll"))
   {
+//    OutputDebugStringW(L"[SK] Detected dinput8.dll load");
     SK_SetDLLRole (DLL_ROLE::DInput8);
 
     SK_dgVoodoo_CheckForInterop ();
@@ -1124,6 +1166,7 @@ SK_EstablishDllRole (skWin32Module&& _sk_module)
 
   else if (0 == SK_Path_wcsicmp (wszShort, L"dxgi.dll"))
   {
+//    OutputDebugStringW(L"[SK] Detected dxgi.dll load");
     SK_SetDLLRole (DLL_ROLE::DXGI);
 
     SK_dgVoodoo_CheckForInterop ();
@@ -1131,6 +1174,7 @@ SK_EstablishDllRole (skWin32Module&& _sk_module)
 
   else if (0 == SK_Path_wcsicmp (wszShort, L"d3d11.dll"))
   {
+//    OutputDebugStringW(L"[SK] Detected d3d11.dll load");
     SK_SetDLLRole ( static_cast <DLL_ROLE> ( (int)DLL_ROLE::DXGI |
                                              (int)DLL_ROLE::D3D11 ) );
 
@@ -1155,11 +1199,15 @@ SK_EstablishDllRole (skWin32Module&& _sk_module)
   }
 #endif
 
-  else if (0 == SK_Path_wcsicmp (wszShort, L"d3d9.dll"))
-    SK_SetDLLRole (DLL_ROLE::D3D9);
+  else if (0 == SK_Path_wcsicmp(wszShort, L"d3d9.dll")) {
+   // OutputDebugStringW(L"[SK] Detected d3d9.dll load");
+    SK_SetDLLRole(DLL_ROLE::D3D9);
+  }
 
-  else if (0 == SK_Path_wcsicmp (wszShort, L"OpenGL32.dll"))
-    SK_SetDLLRole (DLL_ROLE::OpenGL);
+  else if (0 == SK_Path_wcsicmp(wszShort, L"OpenGL32.dll")) {
+   // OutputDebugStringW(L"[SK] Detected OpenGL32.dll load");
+    SK_SetDLLRole(DLL_ROLE::OpenGL);
+  }
 
 
   //
@@ -1177,12 +1225,16 @@ SK_EstablishDllRole (skWin32Module&& _sk_module)
     auto SK_InitCentralConfig = [&](void)
     {
       SK_TLS_Acquire ();
-
+     // OutputDebugStringW(L"[SK] SK_InitCentralConfig RunOnce");
       SK_RunOnce ({
+       // OutputDebugStringW(L"[SK] SK_InitCentralConfig RootPath");
         SK_EstablishRootPath ();
+        //OutputDebugStringW(L"[SK] SK_InitCentralConfig LoadConfig");
         SK_LoadConfigEx      (L"SpecialK", false);
-
+       // OutputDebugStringW(L"[SK] QualifiedApp");
         SK_GetFullyQualifiedApp ();
+        //OutputDebugStringW(L"[SK] SK_InitCentralConfig Done");
+
       });
     };
 
@@ -1276,6 +1328,10 @@ SK_EstablishDllRole (skWin32Module&& _sk_module)
             return SK_DontInject ();
 
           SK_InitCentralConfig ();
+          //OutputDebugStringW( std::format (
+          //  L"Special K Explicit Injection: {}",
+          //  static_cast <int> (role)
+          //).c_str());
 
           SK_SetDLLRole (role);
           explicit_inject = true;
@@ -1371,24 +1427,52 @@ SK_EstablishDllRole (skWin32Module&& _sk_module)
       //
       //   => We still need to figure out the primary graphics API.
       //
-      if ( ( is_steamworks_game || is_epic_game    || is_origin_game ||
-            /*is_microsoft_game || */ is_ubisoft_game || is_gog_game ||
+
+      std::wstring hostApp = SK_GetHostApp();
+      bool endfieldGame = (hostApp == L"Games.exe") ? true : false;
+      //SK_Inject_InitWhiteAndBlacklists();
+      void SK_Inject_InitWhiteAndBlacklists(void);
+      SK_Inject_InitWhiteAndBlacklists();
+
+     // OutputDebugStringW(L"Additional Check: Steam/Ubisoft/Whitelist");
+     // std::wstring str_check = std::format(
+     //   L"steam: {}, epic: {}, origin: {}, ubi: {}, gog: {}, endfield: {}, whitelist: {}, blacklist: {}"
+    //    , is_steamworks_game, is_epic_game, is_origin_game, is_ubisoft_game, is_gog_game, endfieldGame,
+    //    SK_Inject_TestWhitelists(SK_GetFullyQualifiedApp()), SK_Inject_TestBlacklists(SK_GetFullyQualifiedApp()));
+
+      //OutputDebugStringW(str_check.c_str());
+
+      if ((is_steamworks_game || is_epic_game || is_origin_game || endfieldGame ||
+            is_ubisoft_game || is_gog_game ||
              SK_Inject_TestWhitelists (SK_GetFullyQualifiedApp ()) ) &&
           (! SK_Inject_TestBlacklists (SK_GetFullyQualifiedApp ()) )  )
       {
+       // OutputDebugStringW(L"[SK] Automatic Injection Criteria Met");
         SK_InitCentralConfig ();
 
-        if (SK_Inject_ProcessBlacklist ())
-          return SK_DontInject ();
+        if (SK_Inject_ProcessBlacklist()) {
+          //OutputDebugStringW(L"[SK] Process is blacklisted -- Aborting Injection");
+          return SK_DontInject();
+        }
+      /*  else {
+          OutputDebugStringW(L"[SK] Process is not blacklisted -- Continuing Injection");
+        }*/
 
         // Try the last-known API first -- if we have one.
         //
+          
+        //OutputDebugStringW(std::format(L"Last Known API: {}",
+        //  static_cast<int>(config.apis.last_known)).c_str()
+        //);
+
         if (config.apis.last_known != SK_RenderAPI::Reserved)
         {
           if (! SK_dgVoodoo_CheckForInterop ())
           {
+           //OutputDebugStringW(L"[SK] InteropVodoo scucess and Attempting auto-inject of last known API");
             if (_SKM_AutoBootLastKnownAPI (config.apis.last_known))
             {
+             //OutputDebugStringW(L"[SK] Auto-injected last known API");
               return true;
             }
           }
@@ -1408,22 +1492,40 @@ SK_EstablishDllRole (skWin32Module&& _sk_module)
                 &d3d8, &ddraw, &glide
         );
 
-                  
-        gl     |= (SK_IsModuleLoaded (L"OpenGL32.dll") && !SK_IsModuleLoaded (L"EOSOVH-Win64-Shipping.dll"));
-        d3d9   |= (SK_IsModuleLoaded (L"d3d9.dll"));
+        const int intervalMs = 500;
+        const int maxTimeMs = 10000;
+        int elapsed = 0;
 
-        // Not specific enough; some engines will pull in DXGI even if they
-        //   do not use D3D10/11/12/D2D/DWrite
-        //
-      //dxgi   |= (SK_IsModuleLoaded (L"dxgi.dll"));
+        //(L"[SK] Waiting for graphics modules to load...");
+        while (elapsed < maxTimeMs)
+        {
+          gl |= (SK_IsModuleLoaded(L"OpenGL32.dll") && !SK_IsModuleLoaded(L"EOSOVH-Win64-Shipping.dll"));
+          d3d9 |= (SK_IsModuleLoaded(L"d3d9.dll"));
 
-        d3d11  |= (SK_IsModuleLoaded (L"d3d11.dll"));
-        d3d11  |= (SK_IsModuleLoaded (L"d3dx11_43.dll"));
-        d3d11  |= (SK_IsModuleLoaded (L"dxcore.dll")); // Unity
+          // Not specific enough; some engines will pull in DXGI even if they
+          //   do not use D3D10/11/12/D2D/DWrite
+          //
+        //dxgi   |= (SK_IsModuleLoaded (L"dxgi.dll"));
 
-        d3d12  |= (SK_IsModuleLoaded (L"d3d12.dll"));
+          d3d11 |= (SK_IsModuleLoaded(L"d3d11.dll"));
+          d3d11 |= (SK_IsModuleLoaded(L"d3dx11_43.dll"));
+          d3d11 |= (SK_IsModuleLoaded(L"dxcore.dll")); // Unity
 
-        dxgi   |= ( d3d11 | d3d12 );
+          d3d12 |= (SK_IsModuleLoaded(L"d3d12.dll"));
+          dxgi |= (d3d11 | d3d12);
+
+          if (gl || d3d9 || d3d11 || d3d12 || dxgi)
+          {
+            //OutputDebugStringW(L"[SK] Detected graphics API via loaded modules");
+            break;
+          }
+          else {
+            SK_Sleep(intervalMs);
+            elapsed += intervalMs;
+            //OutputDebugStringW(L"[SK] Waiting for graphics modules to load...");
+          }
+        }
+        
 
         if (SK_dgVoodoo_CheckForInterop ())
         {
@@ -1498,7 +1600,7 @@ SK_EstablishDllRole (skWin32Module&& _sk_module)
           {
             return SK_DontInject ();
           }
-
+          //OutputDebugStringW(L"[SK] Autodetected Opengl32.dll");
           SK_SetDLLRole (DLL_ROLE::OpenGL);
         }
 
@@ -1518,6 +1620,7 @@ SK_EstablishDllRole (skWin32Module&& _sk_module)
           //}
           //
           //else
+         // OutputDebugStringW(L"[SK] Autodetected DXGI.dll");
             SK_SetDLLRole (DLL_ROLE::DXGI);
         }
 
@@ -1527,13 +1630,15 @@ SK_EstablishDllRole (skWin32Module&& _sk_module)
           {
             return SK_DontInject ();
           }
-
+          //OutputDebugStringW(L"[SK] Autodetected d3d9.dll");
           SK_SetDLLRole (DLL_ROLE::D3D9);
         }
 
 #ifdef _M_AMD64
-        else if (config.apis.Vulkan.hook && vulkan)
-          SK_SetDLLRole (DLL_ROLE::Vulkan);
+        else if (config.apis.Vulkan.hook && vulkan) {
+          //OutputDebugStringW(L"[SK] Autodetected vulkan.dll");
+          SK_SetDLLRole(DLL_ROLE::Vulkan);
+        }
 #endif
 
 
@@ -1546,16 +1651,24 @@ SK_EstablishDllRole (skWin32Module&& _sk_module)
         else
         {
           if (config.apis.dxgi.d3d11.hook ||
-              config.apis.dxgi.d3d12.hook)
-            SK_SetDLLRole (DLL_ROLE::DXGI);
-          else if (config.apis.d3d9.hook  ||
-              config.apis.d3d9ex.hook)
-            SK_SetDLLRole (DLL_ROLE::D3D9);
-          else if (config.apis.OpenGL.hook)
-            SK_SetDLLRole (DLL_ROLE::OpenGL);
+            config.apis.dxgi.d3d12.hook) {
+            //OutputDebugStringW(L"[SK] Defaulting to DXGI.dll");
+            SK_SetDLLRole(DLL_ROLE::DXGI);
+          }
+          else if (config.apis.d3d9.hook ||
+            config.apis.d3d9ex.hook) {
+            //OutputDebugStringW(L"[SK] Defaulting to d3d9.dll");
+            SK_SetDLLRole(DLL_ROLE::D3D9);
+          }
+          else if (config.apis.OpenGL.hook) {
+            //OutputDebugStringW(L"[SK] Defaulting to Opengl32.dll");
+            SK_SetDLLRole(DLL_ROLE::OpenGL);
+          }
 #ifdef _M_AMD64
-          else if (config.apis.Vulkan.hook)
-            SK_SetDLLRole (DLL_ROLE::Vulkan);
+          else if (config.apis.Vulkan.hook) {
+            //OutputDebugStringW(L"[SK] Defaulting to vulkan.dll");
+            SK_SetDLLRole(DLL_ROLE::Vulkan);
+          }
 #else
           else if (config.apis.d3d8.hook && has_dgvoodoo)
             SK_SetDLLRole (DLL_ROLE::D3D8);
@@ -1569,6 +1682,7 @@ SK_EstablishDllRole (skWin32Module&& _sk_module)
         {
           //config.apis.dxgi.d3d11.hook = true;
           //SK_SetDLLRole (     DLL_ROLE::DXGI   );
+          //OutputDebugStringW(L"[SK] No graphics API detected; defaulting to OpenGL.dll");
           config.apis.OpenGL.hook = true;
           SK_SetDLLRole (     DLL_ROLE::OpenGL   );
         }
@@ -1579,9 +1693,16 @@ SK_EstablishDllRole (skWin32Module&& _sk_module)
         config.apis.last_known =
           SK_RenderAPI::Reserved;
       }
+ else {
+   //OutputDebugStringW(L"Not included in whitelist");
+      }
     }
   }
 
+  //OutputDebugStringW( std::format (
+  //  L"Special K established DLL role: {}",
+  //   static_cast <int> (SK_GetDLLRole ())
+  //).c_str());
   return
     ( SK_GetDLLRole () != DLL_ROLE::INVALID );
 }

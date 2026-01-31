@@ -1721,6 +1721,7 @@ SK_EstablishRootPath (void)
             SK_GetHostPath (), _TRUNCATE);
 #endif
   lstrcatW  (wszConfigPath, LR"(\)");
+  //OutputDebugStringW(std::format(L"[SK] HostPath: {}\n", SK_GetHostPath()).c_str());
 
   // File permissions don't permit us to store logs in the game's directory,
   //   so implicitly turn on the option to relocate this stuff.
@@ -1749,6 +1750,7 @@ SK_EstablishRootPath (void)
       wcsncpy_s ( SKX_GetInstallPath (), MAX_PATH,
                     path.parent_path ().wstring ().
                                           c_str (), _TRUNCATE );
+//      OutputDebugStringW(std::format(L"[SK] 1: Install Path from module path: {}\n", SKX_GetInstallPath()).c_str());
     }
 
     catch (const std::exception& e)
@@ -1777,6 +1779,7 @@ SK_EstablishRootPath (void)
 
       wcsncpy_s ( SKX_GetInstallPath (), MAX_PATH,
                       wszInstallPath,   _TRUNCATE );
+//      OutputDebugStringW(std::format(L"[SK] 2: Install Path from module path: {}\n", SKX_GetInstallPath()).c_str());
 
       // Couldn't create the directory, try something else
       if (! SK_CreateDirectoriesEx (SKX_GetInstallPath (), false))
@@ -1802,6 +1805,8 @@ SK_EstablishRootPath (void)
 
           wcsncpy_s ( SKX_GetInstallPath (), MAX_PATH,
                           wszInstallPath,   _TRUNCATE );
+//          OutputDebugStringW(std::format(L"[SK] 3: Install Path from module path: {}\n", SKX_GetInstallPath()).c_str());
+
 
           // Couldn't create the directory, try something else
           if (! SK_CreateDirectoriesEx (SKX_GetInstallPath (), false))
@@ -1817,6 +1822,7 @@ SK_EstablishRootPath (void)
     {
       swprintf ( SKX_GetInstallPath (), LR"(%s\My Mods\SpecialK)",
                  SK_GetDocumentsDir ().c_str () );
+//      OutputDebugStringW(std::format(L"[SK] 4: Install Path from module path: {}\n", SKX_GetInstallPath()).c_str());
     }
   }
 
@@ -1868,7 +1874,9 @@ SK_EstablishRootPath (void)
   lstrcatW (SKX_GetRootPath (), LR"(\)");
   lstrcatW (wszConfigPath,      LR"(\)");
 
+//  OutputDebugStringW(std::format(L"[SK] Config Path: {}", wszConfigPath).c_str());
   SK_SetConfigPath (wszConfigPath);
+
 }
 
 bool
@@ -2119,14 +2127,21 @@ SK_StartupCore (const wchar_t* backend, void* callback)
 
   dll_log->LogEx ( true, L"Loading user preferences from %s.ini... ",
                      config_name );
+//  OutputDebugStringW (
+//    SK_FormatStringW ( L"[SK Init] Loading user preferences from %s.ini...",
+//                        config_name ).c_str ()
+//  );
+
   if (SK_LoadConfig (config_name))
   {
+   // OutputDebugStringW(L"[SK Init] User preferences loaded successfully.");
     dll_log->LogEx ( false, L"done! (%6.2f ms)\n",
       SK_DeltaPerfMS (liStartConfig.QuadPart, 1) );
   }
 
   else
   {
+  //  OutputDebugStringW(L"[SK Init] Failed to load user preferences");
     dll_log->LogEx (false, L"failed!\n");
 
     std::filesystem::path default_global_name (

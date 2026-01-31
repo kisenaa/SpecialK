@@ -1,4 +1,4 @@
-
+﻿
 NAME tobii_stream_engine_sk64.dll
 EXPORTS
     tobii_api_create                                             @1

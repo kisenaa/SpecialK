@@ -1497,6 +1497,7 @@ CBTProc ( _In_ int    nCode,
           _In_ WPARAM wParam,
           _In_ LPARAM lParam )
 {
+  //OutputDebugStringW(L"[INJECT-SK] callback CBTProc Hook !");
   if (nCode < 0)
   {
     return
@@ -1528,7 +1529,6 @@ CBTProc ( _In_ int    nCode,
     }
   }
 #endif
-
   return
     CallNextHookEx (
       hHookCBT, nCode, wParam, lParam
@@ -1555,6 +1555,7 @@ void
 __stdcall
 SKX_InstallCBTHook (void)
 {
+  //OutputDebugStringW(L"[INJECT-SK] Installing CBT Hook...\r\n");
   SK_SleepEx (15UL, FALSE);
 
   // Nothing to do here, move along.
@@ -1705,6 +1706,7 @@ CALLBACK
 RunDLL_InjectionManager ( HWND   hwnd,        HINSTANCE hInst,
                           LPCSTR lpszCmdLine, int       nCmdShow )
 {
+  //OutputDebugStringW(L"[INJECT-SK] Special K Injection Manager Launched...\r\n");
   UNREFERENCED_PARAMETER (hInst);
   UNREFERENCED_PARAMETER (hwnd);
 
@@ -2403,6 +2405,8 @@ SK_Inject_ParseWhiteAndBlacklists (const std::wstring& base_path)
     { blacklist_count, blacklist_patterns,
          base_path + L"blacklist.ini" } };
 
+//  OutputDebugStringW(std::format(L"Parsing whitelist/blacklist files in: {}", base_path.c_str()).c_str());
+
   for ( auto& list : lists )
   {
     list.dll_global.count = -1;
@@ -2461,48 +2465,79 @@ SK_Inject_ParseWhiteAndBlacklists (const std::wstring& base_path)
 void
 SK_Inject_InitWhiteAndBlacklists (void)
 {
-  SK_Thread_CreateEx ([](LPVOID)->DWORD
-  {
-    SK_AutoCOMInit _require_COM;
+//  OutputDebugStringW(std::format(L"Init Whitelist in: {}", SK_GetInstallPath()).c_str());
 
-    static
-      std::filesystem::path global_cfg_dir =
-        std::filesystem::path (SK_GetInstallPath ()) / LR"(Global\)";
-
-    SK_Inject_ParseWhiteAndBlacklists (global_cfg_dir);
-
-    hWhitelistChangeNotification =
-      FindFirstChangeNotificationW (
-        global_cfg_dir.c_str (), FALSE,
-          FILE_NOTIFY_CHANGE_FILE_NAME  |
-          FILE_NOTIFY_CHANGE_SIZE       |
-          FILE_NOTIFY_CHANGE_LAST_WRITE
-      );
-
-    if (hWhitelistChangeNotification != INVALID_HANDLE_VALUE)
+  auto worker = [](LPVOID)->DWORD
     {
-      while ( FindNextChangeNotification (
-            hWhitelistChangeNotification ) != FALSE )
+      //OutputDebugStringW(L"LOP-1");
+      SK_AutoCOMInit _require_COM;
+      //OutputDebugStringW(L"LOP-2");
+
+      static
+        std::filesystem::path global_cfg_dir =
+        std::filesystem::path(SK_GetInstallPath()) / LR"(Global\)";
+
+      //OutputDebugStringW(std::format(L"Parsing whitelist/blacklist files in: {}", global_cfg_dir.c_str()).c_str());
+      //OutputDebugStringW(L"LOP-3");
+
+      SK_Inject_ParseWhiteAndBlacklists(global_cfg_dir);
+      //OutputDebugStringW(L"LOP-4");
+
+      if (SK_GetHostAppUtil()->isInjectionTool())
       {
-        if ( WAIT_OBJECT_0 ==
-               WaitForSingleObject (hWhitelistChangeNotification, INFINITE) )
+        hWhitelistChangeNotification =
+          FindFirstChangeNotificationW(
+            global_cfg_dir.c_str(), FALSE,
+            FILE_NOTIFY_CHANGE_FILE_NAME |
+            FILE_NOTIFY_CHANGE_SIZE |
+            FILE_NOTIFY_CHANGE_LAST_WRITE
+          );
+
+        if (hWhitelistChangeNotification != INVALID_HANDLE_VALUE)
         {
-          SK_Inject_ParseWhiteAndBlacklists (global_cfg_dir);
+          while (FindNextChangeNotification(
+            hWhitelistChangeNotification) != FALSE)
+          {
+            if (WAIT_OBJECT_0 ==
+              WaitForSingleObject(hWhitelistChangeNotification, INFINITE))
+            {
+              SK_Inject_ParseWhiteAndBlacklists(global_cfg_dir);
+            }
+          }
         }
       }
+      SK_Thread_CloseSelf();
+
+      return 0;
+    };
+
+  if (SK_GetHostAppUtil()->isInjectionTool())
+  {
+    HANDLE h = SK_Thread_CreateEx(worker, L"[SK_INJECT] White/Blacklist Sentinel");
+    if (h == 0)
+    {
+      DWORD err = GetLastError();
+      wchar_t buf[128] = {};
+      _snwprintf_s(buf, _TRUNCATE, L"[SK_INJECT] Failed to create sentinel thread (err=%lu); running inline.", err);
+      //OutputDebugStringW(buf);
+      //OutputDebugStringW(L"Running Inline");
+      worker(nullptr);
     }
-
-    SK_Thread_CloseSelf ();
-
-    return 0;
-  }, L"[SK_INJECT] White/Blacklist Sentinel");
+  }
+  else {
+    worker(nullptr);
+  }
+  //OutputDebugStringW(L"Return Init Whitelist");
 }
 
 bool
 SK_Inject_TestUserWhitelist (const wchar_t* wszExecutable)
 {
-  if ( whitelist_count <= 0 )
+  //OutputDebugStringW(std::format(L"Testing User Whitelist: {}", wszExecutable).c_str());
+  if (whitelist_count <= 0) {
+   // OutputDebugStringW(L"No whitelist patterns loaded.");
     return false;
+  }
 
   for ( int i = 0; i < whitelist_count; i++ )
   {
@@ -2513,10 +2548,12 @@ SK_Inject_TestUserWhitelist (const wchar_t* wszExecutable)
 
     if (std::regex_search (wszExecutable, regexp))
     {
+      //OutputDebugStringW(std::format(L"Executable matched whitelist pattern: {}", &whitelist_patterns[MAX_PATH * i]).c_str());
       return true;
     }
   }
 
+  //OutputDebugStringW(L"No whitelist patterns matched.");
   return false;
 }
 
